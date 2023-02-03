@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="30aaf6ab-7e06-4aba-b2d2-556dbb4a7f3f" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="201c3fa8-b7b2-4027-8d0a-1be01b160995" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" database="mule_class_db" />
+	</db:config>
+	<flow name="FlowControl1" doc:id="2ffb1eca-224d-4f0b-b872-7ccdc9793bd1" >
+		<http:listener doc:name="Mule-Event" doc:id="d4336bf5-5a67-4871-ab95-a8e629073108" config-ref="HTTP_Listener_config" path="/flow1"/>
+		<set-payload value='#[["michael", "Addis", "Alex"]]' doc:name="UserNameList" doc:id="e09cbb83-f961-4d4d-bbd4-f7123735e66a" />
+		<first-successful doc:name="First Successful" doc:id="f0d6436d-140b-4986-8782-9d179b898e62" >
+			<route >
+				<logger level="INFO" doc:name='"First success "' doc:id="c4f6b514-c2ac-4296-81d3-b33f79a27d4a" message='#["First success "]'/>
+				<ee:transform doc:name="ReadUserData/USER_DATA" doc:id="623c338b-03eb-4b49-b16e-e52cf1dbbe23" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+readUrl("https://jsonplaceholder.typicode.com/users" , "application/json")]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</route>
+			<route >
+				<logger level="INFO" doc:name='"Second Success"' doc:id="14e5d8c1-18ac-40ed-b88a-06c012ea47c6" message='#["Second Success"]'/>
+				<ee:transform doc:name="ReadUserData/POST_DATA" doc:id="c772fbd5-d9b6-486c-85c2-30d89ef5762d" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+readUrl("https://jsonplaceholder.typicode.com/posts", "application/json")]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</route>
+		</first-successful>
+		<ee:transform doc:name="Transform Message" doc:id="822ce6dc-6923-406c-8f84-3684207ab99a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map (val, index) -> {
+    "ID": val.id,
+    "Post Title": val.title
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="FlowControl2" doc:id="1dadf8d9-5007-4f3e-8237-03c15c3a267b" >
+		<http:listener doc:name="Mule-event" doc:id="8d817d58-a1b4-4bc3-abc2-f0bf8ef89cea" config-ref="HTTP_Listener_config" path="/flow2"/>
+		<set-payload value='#[readUrl("https://jsonplaceholder.typicode.com/users", "application/json")]' doc:name="ABCData" doc:id="ce94b065-adbd-4486-bff6-25b689130490" />
+		<ee:transform doc:name="Transform Message" doc:id="bf685d53-90b0-4457-adf5-fa0d71309cd6" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="UserData" ><![CDATA[%dw 2.0
+output application/java
+---
+payload map (val, index) -> {
+	"name": val.name,
+	"phone": val.phone
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<scatter-gather doc:name="Rout-Message" doc:id="191053d9-5abb-4efe-82b5-bddea94179bd" target="allinone">
+			<route >
+				<logger level="INFO" doc:name="Rout-1" doc:id="f2e15eb3-62c6-4bc6-9660-589946a6ffde" message="Rout-1 #[payload]"/>
+				<db:bulk-insert doc:name="Bulk insert" doc:id="7412db06-96a5-4443-93ec-f6089f46c55f" config-ref="Database_Config">
+					<db:bulk-input-parameters ><![CDATA[#[vars.UserData]]]></db:bulk-input-parameters>
+					<db:sql ><![CDATA[INSERT INTO data_tb_1 (name, phone) VALUES (:name, :phone)]]></db:sql>
+				</db:bulk-insert>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Rout-2" doc:id="cac12baa-5658-49f3-9977-e1978c093fc3" message="Rout-2 #[payload]"/>
+				<db:bulk-insert doc:name="Bulk insert" doc:id="56e04059-f139-41bd-b723-cde293fa7b28" config-ref="Database_Config">
+					<db:bulk-input-parameters ><![CDATA[#[vars.UserData]]]></db:bulk-input-parameters>
+					<db:sql ><![CDATA[INSERT INTO data_tb_2 (name, phone) VALUES (:name, :phone)]]></db:sql>
+				</db:bulk-insert>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Rout-3" doc:id="c4b7a2f6-1f2f-4b63-b522-55f1472a6231" message="Rout-3 #[payload]"/>
+				<db:bulk-insert doc:name="Bulk insert" doc:id="cc28fe89-d764-4048-bee0-63894ff5b3c3" config-ref="Database_Config">
+					<db:bulk-input-parameters ><![CDATA[#[vars.UserData]]]></db:bulk-input-parameters>
+					<db:sql ><![CDATA[INSERT INTO data_tb_3 (name, phone) VALUES (:name, :phone)]]></db:sql>
+				</db:bulk-insert>
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Transform Message" doc:id="eb27a219-8e13-4a65-b821-e13953192d2e">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+att
+---
+{
+	"Msg": "Data Inserted !"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="flow_controlFlow" doc:id="7c067171-3fb4-442c-a00d-cede6c599fb9" >
+		<http:listener doc:name="Mule-Event" doc:id="1061129d-8aa8-4af3-8a1c-295591eea5e1" config-ref="HTTP_Listener_config" path="/flow-scat"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="8f88ea22-9438-4fbf-855d-2e4a9bcd1693" >
+			<route >
+				<logger level="INFO" doc:name="First Rout" doc:id="825989a8-daab-4695-ad80-e2566ea2e28c" message='#["First Rout:" ++ now()  as String]'/>
+				<db:select doc:name="USER DATA" doc:id="11b24eab-7f8c-44a2-89a5-aaa6bafaa9f9" config-ref="Database_Config">
+					<db:sql ><![CDATA[SELECt * FROm data_tb_1]]></db:sql>
+				</db:select>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Second Rout" doc:id="3b02793c-a2b1-4597-9dab-1dde7bf1728d" message='#["Second Rout:" ++ now()  as String]'/>
+				<set-payload value='#[readUrl("https://jsonplaceholder.typicode.com/users", "application/json")]' doc:name="USER API" doc:id="0454b084-be0d-4846-856b-a1d6994b5c80" />
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Transform Message" doc:id="a5355096-85e7-4133-b377-df144ac341cb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var Data1 = payload mapObject (value, key, index) -> {
+        (key): (value.payload)
+        
+    }
+---
+Data1
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="Choice-Router" doc:id="141bf93a-237f-4457-8834-ef0f74b84089" >
+		<http:listener doc:name="Mule-Event" doc:id="aedd40d5-7820-419e-8d18-2203e8a2603d" config-ref="HTTP_Listener_config" path="/choice/{count}"/>
+		<set-payload value='#[readUrl("https://jsonplaceholder.typicode.com/users", "application/json")]' doc:name="Copy_of_USER API" doc:id="ef987c50-5ae9-4d1c-8891-7685e25ea2e5" />
+		<choice doc:name="Choice" doc:id="3de575ff-ae05-4b6b-aa5e-1f948690d6fd" >
+			<when expression="#[sizeOf(payload) &gt; attributes.uriParams.count]">
+				<ee:transform doc:name="Transform Message" doc:id="bdf10a59-2eee-456a-aca8-086c6955ffe5" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Msg": true,
+	"Data": payload
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[sizeOf(payload) == attributes.uriParams.count as Number]">
+				<ee:transform doc:name="Transform Message" doc:id="3b544925-4da3-4b93-b6a5-d0ef175759f8" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Msg": "Data Equal!"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="8aa7f568-0a46-4ad3-ab35-e835891b8729" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"msg": false
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+
+	</flow>
+	<flow name="flow_controlFlow1" doc:id="6e02d6f1-ce4e-4e7d-91d3-134901a3ce54" >
+		<scheduler doc:name="Scheduler" doc:id="26b91b01-9618-42bc-aa52-1248f0ce21aa" >
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+		</scheduler>
+		<round-robin doc:name="Round Robin" doc:id="27e06171-6ae8-4825-afe5-5ceaab814b48" >
+			<route >
+				<logger level="INFO" doc:name="Rout-1" doc:id="b7518669-57a8-4c43-9eaf-508b6901eb04" message="Rout-1"/>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Rout-2" doc:id="c9e11327-87a8-43f9-b67e-5528133d0965" message="Rout-2"/>
+			</route>
+		</round-robin>
+	</flow>
+</mule>
